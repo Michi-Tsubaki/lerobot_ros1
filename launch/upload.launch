@@ -1,0 +1,11 @@
+<launch>
+  <arg name="config" default="$(find imitation_utils)/config/config.yaml" />
+  <arg name="task_name" default="manipulation" />
+  <arg name="push_to_hub" default="true" />
+
+  <node name="lerobot_uploader" pkg="imitation_utils" type="upload_lerobot.py" output="screen">
+    <param name="config" value="$(arg config)" />
+    <param name="task_name" value="$(arg task_name)" />
+    <param name="push_to_hub" value="$(arg push_to_hub)" />
+  </node>
+</launch>

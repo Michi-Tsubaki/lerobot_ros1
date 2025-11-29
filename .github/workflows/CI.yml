@@ -1,0 +1,73 @@
+name: ROS build and test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ROS Noetic on Ubuntu 20.04
+          - ROS_DISTRO: noetic
+            UBUNTU_VER: 20.04
+            ROS_ONE_VARIANT: ""
+            BUILD_PKGS: ""
+            USE_ROSTOOLING: true
+          # ROS-O on Ubuntu 22.04
+          - ROS_DISTRO: one
+            UBUNTU_VER: 22.04
+            ROS_ONE_VARIANT: techfak
+            BUILD_PKGS: ""
+            USE_ROSTOOLING: false
+          # ROS-O on Ubuntu 24.04
+          - ROS_DISTRO: one
+            UBUNTU_VER: 24.04
+            ROS_ONE_VARIANT: techfak
+            BUILD_PKGS: ""
+            USE_ROSTOOLING: false
+
+    container: ${{ matrix.USE_ROSTOOLING && 'rostooling/setup-ros-docker:ubuntu-focal-latest' || format('ubuntu:{0}', matrix.UBUNTU_VER) }}
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup ROS
+        run: |
+          set -x
+          if [ "${{ matrix.USE_ROSTOOLING }}" = "true" ]; then
+              # rostooling image already has Noetic installed
+              echo "ROS Noetic ready-to-use"
+          else
+              # ROS-O setup for Ubuntu 22.04 / 24.04
+              if [[ "${{ matrix.UBUNTU_VER }}" == "22.04" ]]; then CODE_NAME=jammy; fi
+              if [[ "${{ matrix.UBUNTU_VER }}" == "24.04" ]]; then CODE_NAME=noble; fi
+              echo "deb [trusted=yes] https://ros.packages.techfak.net $CODE_NAME-testing main" | sudo tee /etc/apt/sources.list.d/ros-o-builder.list
+              sudo apt update
+              sudo apt install -y python3-rosdep python3-catkin-tools cmake build-essential
+              sudo rosdep init || echo "Already initialized"
+              rosdep update
+              source /opt/ros/one/setup.bash
+          fi
+
+      - name: Setup Workspace
+        run: |
+          source /opt/ros/${{ matrix.ROS_DISTRO }}/setup.bash
+          mkdir -p ~/ws/src
+          cd ~/ws/src
+          ln -sf $GITHUB_WORKSPACE .
+          rosdep install --from-paths . --ignore-src -r -y || echo "OK"
+
+      - name: Build Packages
+        run: |
+          source /opt/ros/${{ matrix.ROS_DISTRO }}/setup.bash
+          cd ~/ws
+          catkin build ${{ matrix.BUILD_PKGS }} --no-status -sv

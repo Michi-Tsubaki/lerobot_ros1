@@ -1,0 +1,13 @@
+<launch>
+  <arg name="config" default="$(find imitation_utils)/config/config.yaml" />
+  <arg name="episode_index" default="0" />
+  <arg name="results_dir" default="$(find imitation_utils)/results" />
+  <arg name="show_plot" default="false" />
+
+  <node name="policy_evaluator" pkg="imitation_utils" type="eval.py" output="screen">
+    <param name="config" value="$(arg config)" />
+    <param name="episode_index" value="$(arg episode_index)" />
+    <param name="results_dir" value="$(arg results_dir)" />
+    <param name="show_plot" value="$(arg show_plot)" />
+  </node>
+</launch>

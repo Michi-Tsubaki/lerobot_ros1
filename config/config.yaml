@@ -1,0 +1,74 @@
+robot:
+  type: "Robot"
+  fps: 30
+  joint_names: ["JOINT0","JOINT1","JOINT2","JOINT3","JOINT4","JOINT5"]
+  hand_joint_names: ["right_gripper", "left_gripper"]
+  init_pose: [0., 0., 0., 0., 0., 0., 0., 0.]
+  action_clients:
+    body: "robot_controller/follow_joint_trajectory"
+    rhand: "/right_gripper/trajectory_controller/follow_joint_trajectory"
+    lhand: "/left_gripper/trajectory_controller/follow_joint_trajectory"
+
+policy:
+  type: "act"
+  
+  act:
+    chunk_size: 100
+    n_action_steps: 100
+    temporal_ensemble_coeff: None
+  
+  diffusion:
+    num_inference_steps: 4
+    n_action_steps: 4
+    horizon: 8
+
+modalities:
+  state:
+    - name: "joint_states"
+      topic: "/robot/joint_states"
+      msg_type: "sensor_msgs/JointState"
+      field: "position"
+      dim: 6
+    - name: "right_gripper"
+      topic: "/right_gripper/state"
+      msg_type: "sensor_msgs/JointState"
+      field: "position"
+      dim: 1
+    - name: "left_gripper"
+      topic: "/left_gripper/state"
+      msg_type: "sensor_msgs/JointState"
+      field: "position"
+      dim: 1
+  
+  images:
+    - name: "front_camera"
+      topic: "/camera_front/color/image_raw"
+      msg_type: "sensor_msgs/Image"
+      resolution: [1280, 1024]
+      crop: [0.2, 0.8, 0.2, 0.8]
+    - name: "wrist_camera"
+      topic: "/camera_wrist/color/image_raw"
+      msg_type: "sensor_msgs/Image"
+      resolution: [1280, 1024]
+
+paths:
+  data_dir: "../data/dummy_data"
+  output_dir: "../outputs/dummy_outputs"
+  repo_id: "lerobot/pusht"
+  local_dir: "../data/dummy_local"
+
+training:
+  batch_size: 8
+  num_workers: 1
+  learning_rate: 1e-5
+  grad_clip_norm: 10.0
+  total_steps: 100000
+
+augmentation:
+  use_blur: true
+  use_occlusion: true
+  occlusion_prob: 0.0
+  use_brightness: true
+  brightness_range: [0.5, 2.0]
+  use_saturation: true
+  saturation_range: [0.5, 2.0]

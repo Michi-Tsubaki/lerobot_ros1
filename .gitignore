@@ -1,0 +1,7 @@
+config/*
+data/*
+outputs/*
+results/*
+*/__pycache__/*
+src/imitation_utils/__pycache__/*
+requirements.txt

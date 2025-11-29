@@ -1,0 +1,11 @@
+<launch>
+  <arg name="config" default="$(find imitation_utils)/config/config.yaml" />
+  <arg name="episode_index" default="0" />
+  <arg name="num_workers" default="0" />
+
+  <node name="lerobot_visualizer" pkg="imitation_utils" type="visualize_lerobot.py" output="screen">
+    <param name="config" value="$(arg config)" />
+    <param name="episode_index" value="$(arg episode_index)" />
+    <param name="num_workers" value="$(arg num_workers)" />
+  </node>
+</launch>

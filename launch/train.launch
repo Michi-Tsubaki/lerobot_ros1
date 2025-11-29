@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config" default="$(find imitation_utils)/config/config.yaml" />
+
+  <node name="policy_trainer" pkg="imitation_utils" type="train.py" output="screen">
+    <param name="config" value="$(arg config)" />
+  </node>
+</launch>
