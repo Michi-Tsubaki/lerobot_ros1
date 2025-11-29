@@ -1,73 +1,92 @@
-name: ROS build and test
+name: ROS build workflow
 
-on:
-  push:
-    branches:
-      - master
-  pull_request:
+on: [push]
 
 jobs:
-  build_and_test:
-    runs-on: ubuntu-latest
+  ros-o:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        include:
-          # ROS Noetic on Ubuntu 20.04
-          - ROS_DISTRO: noetic
-            UBUNTU_VER: 20.04
-            ROS_ONE_VARIANT: ""
-            BUILD_PKGS: ""
-            USE_ROSTOOLING: true
-          # ROS-O on Ubuntu 22.04
-          - ROS_DISTRO: one
-            UBUNTU_VER: 22.04
-            ROS_ONE_VARIANT: techfak
-            BUILD_PKGS: ""
-            USE_ROSTOOLING: false
-          # ROS-O on Ubuntu 24.04
-          - ROS_DISTRO: one
-            UBUNTU_VER: 24.04
-            ROS_ONE_VARIANT: techfak
-            BUILD_PKGS: ""
-            USE_ROSTOOLING: false
+        DEB_DISTRO: [22.04]
+        ARCH: [x64]
+        ROS_ONE_VARIANT: [techfak]
 
-    container: ${{ matrix.USE_ROSTOOLING && 'rostooling/setup-ros-docker:ubuntu-focal-latest' || format('ubuntu:{0}', matrix.UBUNTU_VER) }}
+    runs-on: ${{ matrix.ARCH == 'x64' && format('ubuntu-{0}', matrix.DEB_DISTRO) || (matrix.ARCH == 'arm64' && format('ubuntu-{0}-arm', matrix.DEB_DISTRO) || format('ubuntu-{0}', matrix.DEB_DISTRO)) }}
 
     env:
-      DEBIAN_FRONTEND: noninteractive
+      DEBIAN_FRONTEND : noninteractive
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Chcekout Source
+        uses: actions/checkout@v3.0.2
 
-      - name: Setup ROS
+      - name: Setup ROS-O deb repository
         run: |
           set -x
-          if [ "${{ matrix.USE_ROSTOOLING }}" = "true" ]; then
-              # rostooling image already has Noetic installed
-              echo "ROS Noetic ready-to-use"
-          else
-              # ROS-O setup for Ubuntu 22.04 / 24.04
-              if [[ "${{ matrix.UBUNTU_VER }}" == "22.04" ]]; then CODE_NAME=jammy; fi
-              if [[ "${{ matrix.UBUNTU_VER }}" == "24.04" ]]; then CODE_NAME=noble; fi
-              echo "deb [trusted=yes] https://ros.packages.techfak.net $CODE_NAME-testing main" | sudo tee /etc/apt/sources.list.d/ros-o-builder.list
-              sudo apt update
-              sudo apt install -y python3-rosdep python3-catkin-tools cmake build-essential
-              sudo rosdep init || echo "Already initialized"
-              rosdep update
-              source /opt/ros/one/setup.bash
+          sudo apt update && sudo apt install -qq -y ca-certificates git
+          if [[ "${{ matrix.DEB_DISTRO }}" == "22.04" ]]; then export CODE_NAME="jammy"; fi
+          if [[ "${{ matrix.DEB_DISTRO }}" == "24.04" ]]; then export CODE_NAME="noble"; fi
+          echo "deb [trusted=yes] https://ros.packages.techfak.net $CODE_NAME-testing main" | sudo tee /etc/apt/sources.list.d/ros-o-builder.list
+          ##
+          # https://github.com/v4hn/ros-deb-builder-action/blob/b7c0ed93fde3a86b5b1027bf8f7145cad6067c90/prepare.sh#L27-L28
+          # Canonical dropped the Debian ROS packages from 24.04 for political reasons. Wow.
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" && "${{ matrix.DISTRO }}" == "ubuntu:24.04" ]]; then apt install -y software-properties-common retry && retry -d 50,10,30,300 -t 12 add-apt-repository -y ppa:v-launchpad-jochen-sprickerhof-de/ros; fi
+          ##
+          sudo apt update
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" ]]; then
+              sudo apt install -qq -y python3-rosdep2
           fi
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "techfak"  ]]; then
+              # Do not install python3-rosdep2, which is an outdated version of rosdep shipped via the Ubuntu repositories (instead of ROS)!
+              sudo apt install -qq -y python3-rosdep
+              sudo rosdep init
+          fi
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" ]]; then
+              export ROSDEP_PACKAGE_MAPPING="yaml https://raw.githubusercontent.com/v4hn/ros-o-builder/jammy-one/repository/local.yaml debian"
+          fi
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "techfak"  ]]; then
+              export ROSDEP_PACKAGE_MAPPING="yaml https://ros.packages.techfak.net/ros-one.yaml ubuntu"
+          fi
+          echo $ROSDEP_PACKAGE_MAPPING | sudo tee /etc/ros/rosdep/sources.list.d/1-ros-o-builder.list
+          rosdep update
+        shell: bash
+
+      - name: Setup catkin-tools
+        run: |
+          set -x
+          # setup catkin tools
+          sudo apt install -qq -y python3-pip
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" ]]; then
+              pip3 install catkin-tools==0.9.4
+              sudo apt install -qq -y catkin
+          fi
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "techfak" ]]; then
+              sudo apt install -qq -y ros-one-catkin python3-catkin-tools
+          fi
+          # setup build tools
+          sudo apt install -qq -y cmake build-essential ros-one-rosbash
+        shell: bash
 
       - name: Setup Workspace
         run: |
-          source /opt/ros/${{ matrix.ROS_DISTRO }}/setup.bash
+          source /opt/ros/one/setup.bash
+          set -x
+          # setup workspace
           mkdir -p ~/ws/src
           cd ~/ws/src
           ln -sf $GITHUB_WORKSPACE .
-          rosdep install --from-paths . --ignore-src -r -y || echo "OK"
+          rosdep install -qq -r -y --from-path . --ignore-src || echo "OK"
+          # check all system packages are able to install, because ROS-O build deb files that needs all packages
+          PIP_BREAK_SYSTEM_PACKAGES=1 rosdep install -qq --simulate -y --from-path . --ignore-src -t exec -t buildtool_export -t buildtool -t build -t build_export | tee rosdep-install.sh
+          # catkin_tools is not available on v4hn/jammy
+          if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" ]]; then sed -i '/python3-catkin-tools/s/^/#/' rosdep-install.sh; fi
+          sed 's/apt-get install/apt-get -y install/;/install ros-one/s/^/#/;/pip3 install/s/^/#/' rosdep-install.sh | bash -xe
+        shell: bash
 
-      - name: Build Packages
+      - name: Compile Packages
         run: |
-          source /opt/ros/${{ matrix.ROS_DISTRO }}/setup.bash
-          cd ~/ws
-          catkin build ${{ matrix.BUILD_PKGS }} --no-status -sv
+          source /opt/ros/one/setup.bash
+          set -x
+          cd ~/ws/
+          catkin build --no-status -sv ${{ matrix.CATKIN_OPTIONS }} --cmake-args -DCATKIN_ENABLE_TESTING=OFF -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON ${{ matrix.CMAKE_OPTIONS }}
+        shell: bash
