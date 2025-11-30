@@ -56,16 +56,21 @@ jobs:
           set -x
           # setup catkin tools
           sudo apt install -qq -y python3-pip
+
           if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "v4hn" ]]; then
               pip3 install catkin-tools==0.9.4
               sudo apt install -qq -y catkin
           fi
+
           if [[ "${{ matrix.ROS_ONE_VARIANT }}" == "techfak" ]]; then
-              sudo apt install -qq -y ros-one-catkin python3-catkin-tools
+              sudo apt install -qq -y ros-one-catkin
+              pip3 install --upgrade "catkin-tools>=0.9.5"
           fi
+
           # setup build tools
           sudo apt install -qq -y cmake build-essential ros-one-rosbash
         shell: bash
+
 
       - name: Setup Workspace
         run: |
