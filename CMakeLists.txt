@@ -23,7 +23,7 @@ catkin_python_setup()
 
 catkin_generate_virtualenv(
   INPUT_REQUIREMENTS requirements.in
-  PYTHON_INTERPRETER python3.10
+  PYTHON_INTERPRETER python3 #python3.10
   USE_SYSTEM_PACKAGES FALSE
   ISOLATE_REQUIREMENTS TRUE
 )
