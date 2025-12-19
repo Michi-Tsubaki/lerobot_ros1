@@ -2,11 +2,32 @@
 
 [![ROS build workflow](https://github.com/Michi-Tsubaki/imitation_utils/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Michi-Tsubaki/imitation_utils/actions/workflows/CI.yml)
 
-This package provides utilities for robot imitation learning (curretly only supports ACT) using ROS1. It supports data collection, policy training, evaluation, deployment, and visualization.
+`imitation_utils` provides utilities for robot imitation learning using **ROS1** and **LeRobot** (currently supports **ACT**).
+It supports the entire workflow including **data collection, policy training, evaluation, deployment, and visualization**.
 
-Lerobot and ROS did not integrate smoothly. In ROS, you must specify topic names and message types. In Lerobot, you also need to specify observation dimensions and modalities. This package allows dynamic configuration through `config.yaml`, enabling easy adjustments without modifying the code.
+### Motivation
 
-Also, the lerobot datasets are large, so this pakcage introduces pickle format datasets which are so light that we can collect data without consuming time. You can convert to lerobot format using upload.launch.
+Integrating ROS and LeRobot is not straightforward. In ROS, users must explicitly specify topic names and message types. In LeRobot, observation modalities and their dimensions must also be defined in advance.
+
+As a result, even small changes in robot or sensor configuration often require modifying multiple parts of the source code.
+
+### Key Features
+
+- **Dynamic configuration via `config.yaml`**  
+  All robot states, sensor modalities, topic names, and message fields are defined in a single configuration file.
+  This allows users to add or modify modalities without changing the source code.
+
+- **Seamless ROS–LeRobot integration**  
+  The package automatically maps ROS messages to LeRobot-compatible observation structures (e.g., `observation.state`, `observation.images`), enabling direct use of LeRobot policies in ROS environments.
+
+- **Lightweight dataset format using pickle**  
+  Standard LeRobot datasets store image data as MP4 files, which introduces encoding overhead during data collection.
+  This package introduces a lightweight dataset format based on Python `pickle`, where images are stored directly as NumPy arrays.
+  This significantly reduces CPU load and I/O latency, enabling fast data collection even with image-based observations.
+
+- **Dataset conversion and visualization**  
+  Although pickle datasets are not directly visualizable, they can be converted to the standard LeRobot format  using `upload.launch`.
+  Converted datasets can be visualized with tools such as `rerun` or uploaded to Hugging Face.
 
 <img src="./figs/system.png" width="1000">
 
