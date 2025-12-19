@@ -4,9 +4,12 @@
 
 This package provides utilities for robot imitation learning (curretly only supports ACT) using ROS1. It supports data collection, policy training, evaluation, deployment, and visualization.
 
-Historically, Lerobot and ROS did not integrate smoothly. In ROS, you must specify topic names and message types. In Lerobot, you also need to specify observation dimensions and modalities. This package allows dynamic configuration through `config.yaml`, enabling easy adjustments without modifying the code.
+Lerobot and ROS did not integrate smoothly. In ROS, you must specify topic names and message types. In Lerobot, you also need to specify observation dimensions and modalities. This package allows dynamic configuration through `config.yaml`, enabling easy adjustments without modifying the code.
 
 Also, the lerobot datasets are large, so this pakcage introduces pickle format datasets which are so light that we can collect data without consuming time. You can convert to lerobot format using upload.launch.
+
+<img src="./figs/system.png" width="1000">
+
 
 ## ROS1 installation for Ubuntu22.04
 This package only supports python3.10-venv. Python3.10 is Ubuntu22.04 official python3 version. If you are Ubuntu20.04(noetic) user or Ubuntu24.04(ros-o) users, it is ok but install python3.10 and python3.10-venv and manually resolve python package version problems.
