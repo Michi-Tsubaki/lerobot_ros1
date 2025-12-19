@@ -5,7 +5,7 @@ on: [push]
 jobs:
   ros-o:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         DEB_DISTRO: [22.04, 24.04]
         ARCH: [x64]

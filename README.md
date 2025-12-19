@@ -32,8 +32,8 @@ As a result, even small changes in robot or sensor configuration often require m
 <img src="./figs/system.png" width="1000">
 
 
-## ROS1 installation for Ubuntu22.04
-This package only supports python3.10-venv. Python3.10 is Ubuntu22.04 official python3 version. If you are Ubuntu20.04(noetic) user or Ubuntu24.04(ros-o) users, it is ok but install python3.10 and python3.10-venv and manually resolve python package version problems.
+## ROS1 installation for Ubuntu22.04, 24.04
+This package is tested on ros-o (Ubuntu22.04 and Ubuntu24.04).
 ```bash
 # Configure ROS One apt repository
 sudo apt install curl
