@@ -42,7 +42,9 @@ jobs:
 
           if [[ "${{ matrix.DEB_DISTRO }}" == "22.04" ]]; then
             CODE_NAME="jammy"
-          fi
+          elif [[ "${{ matrix.DEB_DISTRO }}" == "24.04" ]]; then
+	    CODE_NAME="noble"
+	  fi
 
           echo "deb [trusted=yes] https://ros.packages.techfak.net ${CODE_NAME}-testing main" \
             | sudo tee /etc/apt/sources.list.d/ros-o-builder.list
