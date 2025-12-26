@@ -104,8 +104,15 @@ class DataCollector:
                     obj = getattr(obj, attr)
                 self.latest_data[name] = obj
             else:
-                self.latest_data[name] = getattr(msg, field)
+                val = getattr(msg, field)
+            if hasattr(val, 'x') and hasattr(val, 'y') and hasattr(val, 'z'):
+                self.latest_data[name] = [val.x, val.y, val.z]
+            elif hasattr(val, 'x') and hasattr(val, 'y'):
+                self.latest_data[name] = [val.x, val.y]
+            else:
+                self.latest_data[name] = val
 
+                
     def _image_cb(self, msg, name):
         with self.lock:
             self.latest_data[name] = msg
