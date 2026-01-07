@@ -65,12 +65,7 @@ class DataCollector:
             )
 
         print("Waiting for all topics...")
-        while not rospy.is_shutdown():
-            with self.lock:
-                if all(v is not None for v in self.latest_data.values()):
-                    break
-            rospy.sleep(0.1)
-        print("All topics ready")
+        self.wait_for_topics()
 
         self.load_existing_episodes()
 
@@ -102,7 +97,7 @@ class DataCollector:
                 obj = msg
                 for attr in field.split("."):
                     obj = getattr(obj, attr)
-                self.latest_data[name] = obj
+                val = obj
             else:
                 val = getattr(msg, field)
             if hasattr(val, 'x') and hasattr(val, 'y') and hasattr(val, 'z'):
@@ -112,10 +107,20 @@ class DataCollector:
             else:
                 self.latest_data[name] = val
 
-                
     def _image_cb(self, msg, name):
         with self.lock:
             self.latest_data[name] = msg
+
+    def wait_for_topics(self):
+        while not rospy.is_shutdown():
+            with self.lock:
+                missing = [k for k, v in self.latest_data.items() if v is None]
+            if not missing:
+                print("All topics ready")
+                return True
+            print(f"Waiting for: {missing}")
+            rospy.sleep(0.5)
+        return False
 
     def load_existing_episodes(self):
         episode_files = sorted(self.root.glob("episode_*.pkl"))
@@ -256,6 +261,9 @@ if __name__ == "__main__":
     target = num_episodes + collector.get_next_episode_number()
 
     while collector.get_next_episode_number() < target and not collector.interrupted:
+        if not collector.wait_for_topics():
+            print("Topic check failed, exiting")
+            break
         if collector.record_episode():
             collected += 1
             if collector.get_next_episode_number() < target:
