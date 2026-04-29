@@ -1,9 +1,13 @@
 <launch>
   <arg name="config" default="$(find imitation_utils)/config/config.yaml" />
   <arg name="num_episodes" default="60" />
+  <arg name="episode_duration" default="10.0" />
+  <arg name="continue_existing" default="true" />
 
   <node name="data_collector" pkg="imitation_utils" type="collect.py" output="screen">
     <param name="config" value="$(arg config)" />
     <param name="num_episodes" value="$(arg num_episodes)" />
+    <param name="episode_duration" value="$(arg episode_duration)" />
+    <param name="continue_existing" value="$(arg continue_existing)" />
   </node>
 </launch>

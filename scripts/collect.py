@@ -126,6 +126,22 @@ class DataCollector:
         episode_files = sorted(self.root.glob("episode_*.pkl"))
         if episode_files:
             print(f"Found {len(episode_files)} existing episodes")
+            if not sys.stdin.isatty():
+                continue_existing = rospy.get_param("~continue_existing", True)
+                if continue_existing:
+                    print("stdin is not a TTY. Continuing from existing data.")
+                    return
+                else:
+                    print("stdin is not a TTY. Backing up existing data.")
+                    backup_dir = (
+                        self.root.parent
+                        / f"{self.root.name}_backup_{int(rospy.Time.now().to_sec())}"
+                    )
+                    shutil.move(self.root, backup_dir)
+                    self.root.mkdir(parents=True, exist_ok=True)
+                    print(f"Moved existing data to {backup_dir}")
+                    return
+
             choice = input("Continue from existing data? (y/n): ").strip().lower()
             if choice != "y":
                 backup_dir = (
@@ -150,17 +166,35 @@ class DataCollector:
         frames = []
         ep_num = self.get_next_episode_number()
         print(f"\n=== Episode {ep_num} ===")
-        print("Recording... Press SPACE to finish episode")
+        interactive = sys.stdin.isatty()
+        fixed_duration = rospy.get_param("~episode_duration", 10.0)
 
-        old_settings = termios.tcgetattr(sys.stdin)
+        if interactive:
+            print("Recording... Press SPACE to finish episode")
+        else:
+            print(
+                "Recording... stdin is not a TTY, "
+                f"recording for {fixed_duration} seconds"
+            )
+
+        old_settings = None
+        start_time = rospy.Time.now()
+
         try:
-            tty.setcbreak(sys.stdin.fileno())
+            if interactive:
+                old_settings = termios.tcgetattr(sys.stdin)
+                tty.setcbreak(sys.stdin.fileno())
+
             rate = rospy.Rate(30)
 
             while not rospy.is_shutdown() and not self.interrupted:
-                if self.kbhit():
-                    ch = sys.stdin.read(1)
-                    if ch == " ":
+                if interactive:
+                    if self.kbhit():
+                        ch = sys.stdin.read(1)
+                        if ch == " ":
+                            break
+                else:
+                    if (rospy.Time.now() - start_time).to_sec() >= fixed_duration:
                         break
 
                 try:
@@ -205,11 +239,17 @@ class DataCollector:
 
                 rate.sleep()
         finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            if interactive and old_settings is not None:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
         if self.interrupted:
             if len(frames) > 10:
                 print(f"\nInterrupted. Episode has {len(frames)} frames")
+                if not sys.stdin.isatty():
+                    print("stdin is not a TTY. Auto-saving interrupted episode.")
+                    self.save_episode(ep_num, frames)
+                    return True
+
                 choice = input("Save this episode? (y/n): ").strip().lower()
                 if choice == "y":
                     self.save_episode(ep_num, frames)
@@ -219,6 +259,11 @@ class DataCollector:
         if len(frames) < 10:
             print(f"\nEpisode too short ({len(frames)} frames), discarded")
             return False
+
+        if not sys.stdin.isatty():
+            print(f"\nEpisode recorded ({len(frames)} frames). Auto-accepted.")
+            self.save_episode(ep_num, frames)
+            return True
 
         choice = (
             input(f"\nEpisode recorded ({len(frames)} frames). Accept? (y/n): ")
@@ -238,9 +283,7 @@ class DataCollector:
             pickle.dump(frames, f)
         print(f"\n✓ Saved {filepath}")
 
-
 collector = None
-
 
 def signal_handler(sig, frame):
     global collector
@@ -267,10 +310,13 @@ if __name__ == "__main__":
         if collector.record_episode():
             collected += 1
             if collector.get_next_episode_number() < target:
-                try:
-                    input("Press Enter to start next episode...")
-                except KeyboardInterrupt:
-                    break
+                if sys.stdin.isatty():
+                    try:
+                        input("Press Enter to start next episode...")
+                    except KeyboardInterrupt:
+                        break
+                else:
+                    rospy.sleep(1.0)
 
     episode_files = sorted(collector.root.glob("episode_*.pkl"))
     print(f"\nCollection complete. Total episodes: {len(episode_files)}")
