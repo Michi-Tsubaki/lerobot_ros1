@@ -2,7 +2,7 @@
 
 [![ROS build workflow](https://github.com/Michi-Tsubaki/imitation_utils/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Michi-Tsubaki/imitation_utils/actions/workflows/CI.yml)
 
-`imitation_utils` provides utilities for robot imitation learning using **ROS1** and **LeRobot** (currently supports **ACT**).
+`imitation_utils` provides utilities for robot imitation learning using **ROS1**, **LeRobot**, and **openpi**.
 It supports the entire workflow including **data collection, policy training, evaluation, deployment, and visualization**.
 
 ### Motivation
@@ -17,8 +17,8 @@ As a result, even small changes in robot or sensor configuration often require m
   All robot states, sensor modalities, topic names, and message fields are defined in a single configuration file.
   This allows users to add or modify modalities without changing the source code.
 
-- **Seamless ROS–LeRobot integration**  
-  The package automatically maps ROS messages to LeRobot-compatible observation structures (e.g., `observation.state`, `observation.images`), enabling direct use of LeRobot policies in ROS environments.
+- **Seamless ROS–policy integration**  
+  The package automatically maps ROS messages to LeRobot-compatible observation structures (e.g., `observation.state`, `observation.images`), enabling direct use of LeRobot policies and `openpi`-based policies in ROS environments.
 
 - **Lightweight dataset format using pickle**  
   Standard LeRobot datasets store image data as MP4 files, which introduces encoding overhead during data collection.
@@ -61,7 +61,7 @@ For more information, visit https://ros.packages.techfak.net/ .
 | Launch File | Purpose |
 |------------|---------|
 | `collect.launch` | Collect sensor and camera data from the robot. |
-| `train.launch`   | Train a policy (ACT or Diffusion) using collected data. |
+| `train.launch`   | Train a policy (ACT, Diffusion, or OpenPI) using collected data. |
 | `eval.launch`    | Evaluate a trained policy on selected episodes. |
 | `deploy.launch`  | Deploy a trained policy for real-time robot execution. |
 | `upload.launch`  | Convert datasets to lerobot format and upload collected data to a remote repository or storage. |
@@ -79,6 +79,9 @@ cd ~/catkin_ws/src
 
 # Clone the repository
 git clone https://github.com/Michi-Tsubaki/imitation_utils.git
+
+# If you want to use openpi, initialize the submodule as well
+git submodule update --init --recursive models/openpi
 
 # Build the workspace
 cd ~/catkin_ws
@@ -117,6 +120,13 @@ roslaunch imitation_utils visualize.launch config:=path/to/config.yaml episode_i
 
 All robot-specific parameters, topic names, modalities, and policy settings can be adjusted in `config/config.yaml`.
 This allows running the same scripts with different robots, cameras, or policies without modifying the code.
+
+### OpenPI Notes
+
+- `policy.type: openpi` enables the OpenPI bridge path while keeping the existing ACT/Diffusion path unchanged.
+- `models/openpi` is expected to be available as a git submodule.
+- Fine-tuning uses the existing pickle collection flow, converts it to a local LeRobot dataset under `paths.local_dir`, computes OpenPI normalization stats, and then launches OpenPI training via its Python API.
+- A sample Nextage config is available at `config/nextage_pi05_config.yaml`.
 
 ### Example Policy Configuration
 

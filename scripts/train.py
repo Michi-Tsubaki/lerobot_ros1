@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import sys
 import torch
 import pickle
 import numpy as np
@@ -16,6 +17,7 @@ from torch.amp import GradScaler
 from torchvision.transforms import v2
 import yaml
 from imitation_utils.modality_config import ModalityConfig
+from imitation_utils.openpi_bridge import is_openpi_policy, run_openpi_training
 import rospy
 
 rospy.init_node("policy_trainer", anonymous=True)
@@ -25,6 +27,11 @@ cfg = ModalityConfig(config_path)
 
 with open(config_path if config_path else cfg.config_path) as f:
     config = yaml.safe_load(f)
+
+if is_openpi_policy(config):
+    train_config = run_openpi_training(config_path if config_path else cfg.config_path)
+    print(f"openpi training finished. Checkpoints: {train_config.checkpoint_dir}")
+    sys.exit(0)
 
 
 class RobotDataset(Dataset):

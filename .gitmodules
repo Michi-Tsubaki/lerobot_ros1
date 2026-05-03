@@ -1,0 +1,3 @@
+[submodule "models/openpi"]
+	path = models/openpi
+	url = git@github.com:Physical-Intelligence/openpi.git

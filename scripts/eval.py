@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pickle
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -10,6 +11,11 @@ from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 import yaml
 from imitation_utils.modality_config import ModalityConfig
+from imitation_utils.openpi_bridge import (
+    build_openpi_observation,
+    create_openpi_policy,
+    is_openpi_policy,
+)
 import rospy
 
 rospy.init_node("policy_evaluator", anonymous=True)
@@ -21,17 +27,6 @@ with open(config_path if config_path else cfg.config_path) as f:
     config = yaml.safe_load(f)
 
 policy_type = config["policy"]["type"]
-
-output_dir = Path(config["paths"]["output_dir"])
-if not output_dir.is_absolute():
-    output_dir = Path(config_path).parent / output_dir
-model_dir = output_dir.resolve()
-
-if not model_dir.exists() or not (model_dir / "model.safetensors").exists():
-    print(f"Model not found in {model_dir}")
-    exit(1)
-
-print(f"Using local model: {model_dir}")
 
 data_dir = Path(config["paths"]["data_dir"])
 if not data_dir.is_absolute():
@@ -46,6 +41,97 @@ print(f"Testing on episode {ep_idx} with {len(test_ep)} frames")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
+states = np.array([f["state"] for f in test_ep])
+
+if is_openpi_policy(config):
+    policy = create_openpi_policy(
+        config_path=config_path if config_path else cfg.config_path,
+        checkpoint_dir=rospy.get_param("~model_path", None) or None,
+    )
+
+    predictions = []
+    prompt = rospy.get_param(
+        "~prompt",
+        config.get("policy", {}).get("openpi", {}).get("default_prompt", ""),
+    )
+    with torch.no_grad():
+        for i in range(len(test_ep) - 1):
+            images = {}
+            for mod in cfg.image_modalities:
+                img = cfg.crop_image(test_ep[i][mod.data_key], mod.name)
+                img = cv2.resize(img, mod.resolution)
+                images[mod.name] = img
+
+            observation = build_openpi_observation(
+                state=test_ep[i]["state"],
+                images=images,
+                prompt=prompt,
+                config=config,
+                modality_cfg=cfg,
+            )
+            action_chunk = policy.infer(observation)["actions"]
+            predictions.append(np.asarray(action_chunk[0], dtype=np.float32))
+
+    predictions = np.array(predictions)
+    ground_truth = states[1 : len(predictions) + 1]
+    errors = np.abs(ground_truth - predictions)
+
+    print(f"\nPredictions shape: {predictions.shape}")
+    print(f"Ground truth shape: {ground_truth.shape}")
+    print(f"NaN count in predictions: {np.isnan(predictions).sum()}")
+
+    results_dir = Path(rospy.get_param("~results_dir", "../results"))
+    results_dir.mkdir(exist_ok=True)
+
+    state_dim = ground_truth.shape[1]
+    joint_names = cfg.joint_names + cfg.hand_joint_names
+    if len(joint_names) != state_dim:
+        joint_names = [f"Dim_{i}" for i in range(state_dim)]
+
+    rows = (state_dim + 2) // 3
+    cols = 3
+    fig, axes = plt.subplots(rows, cols, figsize=(18, 5 * rows))
+    if rows == 1:
+        axes = axes.reshape(1, -1)
+    axes = axes.flatten()
+
+    for i in range(state_dim):
+        ax = axes[i]
+        ax.plot(ground_truth[:, i], label="GT", linewidth=2)
+        ax.plot(predictions[:, i], label="Pred", linestyle="--", linewidth=2)
+        ax.set_title(joint_names[i])
+        ax.set_xlabel("Frame")
+        ax.set_ylabel("Value")
+        ax.legend()
+        ax.grid(True)
+
+    for i in range(state_dim, len(axes)):
+        axes[i].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(results_dir / f"openpi_ep{ep_idx}_state.png", dpi=150)
+    print(f"Saved: {results_dir / f'openpi_ep{ep_idx}_state.png'}")
+
+    if not np.isnan(errors).any():
+        print(f"\nMAE: {np.mean(errors):.4f} rad ({np.degrees(np.mean(errors)):.2f} deg)")
+        print(f"Max Error: {np.max(errors):.4f} rad ({np.degrees(np.max(errors)):.2f} deg)")
+    else:
+        print("\nERROR: Predictions contain NaN values!")
+
+    if rospy.get_param("~show_plot", False):
+        plt.show()
+    sys.exit(0)
+
+output_dir = Path(config["paths"]["output_dir"])
+if not output_dir.is_absolute():
+    output_dir = Path(config_path).parent / output_dir
+model_dir = output_dir.resolve()
+
+if not model_dir.exists() or not (model_dir / "model.safetensors").exists():
+    print(f"Model not found in {model_dir}")
+    exit(1)
+
+print(f"Using local model: {model_dir}")
 
 stats = torch.load(model_dir / "dataset_stats.pt")
 
@@ -58,8 +144,6 @@ else:
 
 policy.eval()
 policy.to(device)
-
-states = np.array([f["state"] for f in test_ep])
 
 images = {}
 for mod in cfg.image_modalities:

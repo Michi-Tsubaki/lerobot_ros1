@@ -14,6 +14,14 @@ from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 import threading
 import yaml
 from imitation_utils.modality_config import ModalityConfig
+from imitation_utils.openpi_bridge import (
+    OpenPIActionRunner,
+    build_openpi_observation,
+    create_openpi_client,
+    create_openpi_policy,
+    get_openpi_runtime_spec,
+    is_openpi_policy,
+)
 
 rospy.init_node("policy_deployer")
 bridge = CvBridge()
@@ -33,14 +41,41 @@ class PolicyDeployer:
                 config = yaml.safe_load(f)
 
         self.cfg = ModalityConfig(config_path)
+        self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.max_episode_steps = max_episode_steps
         policy_type = config["policy"]["type"]
+        self.use_openpi = is_openpi_policy(config)
 
-        if model_path is None:
+        if not model_path:
             model_path = config["paths"]["output_dir"]
 
-        if policy_type == "act":
+        if self.use_openpi:
+            runtime_spec = get_openpi_runtime_spec(config, self.cfg)
+            self.openpi_prompt = rospy.get_param(
+                "~prompt",
+                runtime_spec["default_prompt"] or "",
+            )
+            if runtime_spec["runtime"] == "remote":
+                self.policy = create_openpi_client(config_path=config_path or self.cfg.config_path)
+                rospy.loginfo(
+                    "Connected to openpi policy server at "
+                    f"{runtime_spec['server_host']}:{runtime_spec['server_port']}"
+                )
+            else:
+                checkpoint_dir = (
+                    model_path if model_path != config["paths"]["output_dir"] else runtime_spec["checkpoint_dir"]
+                )
+                self.policy = create_openpi_policy(
+                    config_path=config_path or self.cfg.config_path,
+                    checkpoint_dir=checkpoint_dir,
+                )
+                rospy.loginfo(f"Loaded openpi checkpoint from {checkpoint_dir}")
+            self.action_runner = OpenPIActionRunner(
+                self.policy,
+                runtime_spec["n_action_steps"],
+            )
+        elif policy_type == "act":
             self.policy = ACTPolicy.from_pretrained(model_path)
             if self.policy.config.temporal_ensemble_coeff is None:
                 self.policy.config.temporal_ensemble_coeff = config["policy"][
@@ -61,8 +96,9 @@ class PolicyDeployer:
         else:
             raise ValueError(f"Unknown policy type: {policy_type}")
 
-        self.policy.eval()
-        self.policy.to(self.device)
+        if not self.use_openpi:
+            self.policy.eval()
+            self.policy.to(self.device)
 
         self.body_client = actionlib.SimpleActionClient(
             self.cfg.action_clients["body"], FollowJointTrajectoryAction
@@ -193,7 +229,7 @@ class PolicyDeployer:
         self.body_client.wait_for_result()
         rospy.sleep(1.0)
 
-    def get_observation(self):
+    def _read_raw_observation(self):
         with self.lock:
             state_list = []
             for mod in self.cfg.state_modalities:
@@ -226,6 +262,11 @@ class PolicyDeployer:
         for name, img in images.items():
             self.debug_pubs[name].publish(bridge.cv2_to_imgmsg(img, "rgb8"))
 
+        return state, env_state, images
+
+    def get_observation(self):
+        state, env_state, images = self._read_raw_observation()
+
         state = (
             torch.from_numpy(state)
             .to(torch.float32)
@@ -254,6 +295,16 @@ class PolicyDeployer:
             result[f"observation.images.{mod.name}"] = img_tensor
 
         return result
+
+    def get_openpi_observation(self):
+        state, _, images = self._read_raw_observation()
+        return build_openpi_observation(
+            state=state,
+            images=images,
+            prompt=self.openpi_prompt,
+            config=self.config,
+            modality_cfg=self.cfg,
+        )
 
     def execute_action(self, action):
         body_goal = FollowJointTrajectoryGoal()
@@ -287,23 +338,28 @@ class PolicyDeployer:
     def run(self):
         self.move_to_init_pose()
         while not rospy.is_shutdown():
-            self.policy.reset()
+            if self.use_openpi:
+                self.action_runner.reset()
+            else:
+                self.policy.reset()
 
             for step in range(self.max_episode_steps):
                 if rospy.is_shutdown():
                     break
 
-                observation = self.get_observation()
-
-                with torch.inference_mode():
-                    action = self.policy.select_action(observation)
-
-                numpy_action = action.squeeze(0).to("cpu").numpy()
+                if self.use_openpi:
+                    observation = self.get_openpi_observation()
+                    numpy_action = self.action_runner.next_action(observation)
+                else:
+                    observation = self.get_observation()
+                    with torch.inference_mode():
+                        action = self.policy.select_action(observation)
+                    numpy_action = action.squeeze(0).to("cpu").numpy()
 
                 self.execute_action(numpy_action)
                 self.rate.sleep()
 
 
 if __name__ == "__main__":
-    deployer = PolicyDeployer()
+    deployer = PolicyDeployer(max_episode_steps=rospy.get_param("~max_episode_steps", 500))
     deployer.run()
