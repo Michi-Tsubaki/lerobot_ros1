@@ -5,8 +5,12 @@ import shutil
 from pathlib import Path
 
 import yaml
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+from imitation_utils.lerobot_format import (
+    ManualLeRobotDatasetWriter,
+    is_lerobot_dataset,
+    push_lerobot_dataset_to_hub,
+)
 from imitation_utils.modality_config import ModalityConfig
 
 
@@ -52,41 +56,47 @@ def convert_pickle_dataset_to_lerobot(
     if local_dir.exists():
         shutil.rmtree(local_dir)
 
-    dataset = LeRobotDataset.create(
+    dataset = ManualLeRobotDatasetWriter(
         repo_id=repo_id,
         fps=fps,
         root=local_dir,
         robot_type=config["robot"]["type"],
         features=cfg.get_lerobot_features(),
+        overwrite=False,
     )
 
     episode_files = sorted(data_dir.glob("episode_*.pkl"))
     for ep_file in episode_files:
         with open(ep_file, "rb") as f:
             frames = pickle.load(f)
-
-        for i, frame in enumerate(frames):
-            action = frames[i + 1]["state"] if i < len(frames) - 1 else frame["state"]
-            frame_data = {
-                "observation.state": frame["state"],
-                "action": action,
-            }
-
-            if "env_state" in frame:
-                frame_data["observation.environment_state"] = frame["env_state"]
-
-            for mod in cfg.image_modalities:
-                frame_data[f"observation.images.{mod.name}"] = frame[mod.data_key]
-
-            dataset.add_frame(
-                frame_data,
-                task=task_name,
-                timestamp=i / fps,
-            )
-
-        dataset.save_episode()
+        dataset.add_episode(frames, task=task_name)
 
     if push_to_hub:
-        dataset.push_to_hub()
+        push_lerobot_dataset_to_hub(local_dir, repo_id)
 
     return local_dir
+
+
+def ensure_lerobot_dataset(
+    *,
+    config_path: str | Path | None,
+    task_name: str,
+    push_to_hub: bool = False,
+    local_dir_override: str | Path | None = None,
+) -> Path:
+    resolved_config_path, _, config = load_config_dict(config_path)
+    local_dir = (
+        resolve_data_path(resolved_config_path, local_dir_override)
+        if local_dir_override is not None
+        else resolve_data_path(resolved_config_path, config["paths"]["local_dir"])
+    )
+    if is_lerobot_dataset(local_dir):
+        if push_to_hub:
+            push_lerobot_dataset_to_hub(local_dir, config["paths"]["repo_id"])
+        return local_dir
+    return convert_pickle_dataset_to_lerobot(
+        config_path=resolved_config_path,
+        task_name=task_name,
+        push_to_hub=push_to_hub,
+        local_dir_override=local_dir,
+    )

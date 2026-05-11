@@ -9,11 +9,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from imitation_utils.dataset_conversion import (
-    convert_pickle_dataset_to_lerobot,
-    load_config_dict,
-    resolve_data_path,
-)
+from imitation_utils.dataset_conversion import ensure_lerobot_dataset, load_config_dict, resolve_data_path
 
 
 def is_openpi_policy(config: dict[str, Any]) -> bool:
@@ -94,7 +90,7 @@ def prepare_openpi_dataset(
 ) -> Path:
     resolved_config_path, _, config = load_config_dict(config_path)
     task = task_name or get_openpi_section(config).get("task_name", "manipulation")
-    return convert_pickle_dataset_to_lerobot(
+    return ensure_lerobot_dataset(
         config_path=resolved_config_path,
         task_name=task,
         push_to_hub=False,

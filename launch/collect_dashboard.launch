@@ -6,8 +6,8 @@
   <arg name="dataset_format" default="lerobot" />
   <arg name="task_name" default="manipulation" />
   <arg name="save_pickle" default="false" />
-  <arg name="manual_start" default="false" />
-  <arg name="manual_accept" default="false" />
+  <arg name="manual_start" default="true" />
+  <arg name="manual_accept" default="true" />
 
   <node name="data_collector" pkg="imitation_utils" type="collect.py" output="screen">
     <param name="config" value="$(arg config)" />
@@ -20,4 +20,6 @@
     <param name="manual_start" value="$(arg manual_start)" />
     <param name="manual_accept" value="$(arg manual_accept)" />
   </node>
+
+  <node name="collect_dashboard" pkg="imitation_utils" type="collect_dashboard.py" output="screen" />
 </launch>

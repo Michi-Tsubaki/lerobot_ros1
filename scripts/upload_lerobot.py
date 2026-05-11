@@ -2,11 +2,11 @@
 
 import rospy
 
-from imitation_utils.dataset_conversion import convert_pickle_dataset_to_lerobot
+from imitation_utils.dataset_conversion import ensure_lerobot_dataset
 
 rospy.init_node("lerobot_uploader", anonymous=True)
 
-local_dir = convert_pickle_dataset_to_lerobot(
+local_dir = ensure_lerobot_dataset(
     config_path=rospy.get_param("~config", None),
     task_name=rospy.get_param("~task_name", "manipulation"),
     push_to_hub=rospy.get_param("~push_to_hub", True),

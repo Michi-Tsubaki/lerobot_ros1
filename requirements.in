@@ -4,6 +4,7 @@ scikit-robot==0.2.35
 python-fcl==0.7.0.10
 numpy==1.26.4
 pandas==2.3.3
+pyarrow
 opencv-python==4.11.0.86
 torch==2.7.1
 torchvision==0.22.1
@@ -11,5 +12,6 @@ pillow
 pyyaml
 matplotlib
 rospkg
+huggingface-hub
 wandb
 rerun-sdk==0.22.1

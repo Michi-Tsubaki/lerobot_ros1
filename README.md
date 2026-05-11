@@ -20,14 +20,11 @@ As a result, even small changes in robot or sensor configuration often require m
 - **Seamless ROS–policy integration**  
   The package automatically maps ROS messages to LeRobot-compatible observation structures (e.g., `observation.state`, `observation.images`), enabling direct use of LeRobot policies and `openpi`-based policies in ROS environments.
 
-- **Lightweight dataset format using pickle**  
-  Standard LeRobot datasets store image data as MP4 files, which introduces encoding overhead during data collection.
-  This package introduces a lightweight dataset format based on Python `pickle`, where images are stored directly as NumPy arrays.
-  This significantly reduces CPU load and I/O latency, enabling fast data collection even with image-based observations.
+- **LeRobot dataset output by default**  
+  Data collection writes the standard LeRobot layout directly: `meta/` JSON/JSONL metadata, `data/` Parquet tables, and `videos/` MP4 files. The resulting dataset can be loaded by LeRobot tools or uploaded to Hugging Face Hub.
 
-- **Dataset conversion and visualization**  
-  Although pickle datasets are not directly visualizable, they can be converted to the standard LeRobot format  using `upload.launch`.
-  Converted datasets can be visualized with tools such as `rerun` or uploaded to Hugging Face.
+- **Optional pickle compatibility**  
+  The collector can still write the previous pickle format with `dataset_format:=pickle`, or save pickle backups alongside LeRobot output with `save_pickle:=true`.
 
 <img src="./figs/system.png" width="1000">
 
@@ -109,7 +106,7 @@ roslaunch imitation_utils eval.launch config:=path/to/config.yaml episode_index:
 # Deployment
 roslaunch imitation_utils deploy.launch config:=path/to/config.yaml
 
-# Convert your pickle data into lerobot dataset and Upload data to huggigng face hub
+# Upload local LeRobot data to Hugging Face Hub, or convert old pickle data first
 roslaunch imitation_utils upload.launch
 
 # Visualization (suports only after upload data into hub)
