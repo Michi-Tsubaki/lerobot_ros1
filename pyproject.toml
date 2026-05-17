@@ -1,0 +1,22 @@
+[project]
+name = "imitation-utils"
+version = "0.0.1"
+description = "Imitation Learning using Lerobot for ROS1 robots"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+  "pip==25.2",
+  "lerobot==0.3.3",
+  "scikit-robot==0.2.35",
+  "python-fcl==0.7.0.10",
+  "numpy==1.26.4",
+  "pandas==2.3.3",
+  "opencv-python==4.11.0.86",
+  "torch==2.7.1",
+  "torchvision==0.22.1",
+  "pillow",
+  "pyyaml",
+  "matplotlib",
+  "rospkg",
+  "wandb",
+  "rerun-sdk==0.22.1",
+]

@@ -11,7 +11,7 @@ if("$ENV{ROS_DISTRO}" STREQUAL "indigo" OR
 endif()
 
 find_package(catkin REQUIRED COMPONENTS
-  catkin_virtualenv
+  catkin_uv
   geometry_msgs
   rospy
   sensor_msgs
@@ -21,14 +21,12 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_python_setup()
 
-catkin_generate_virtualenv(
-  INPUT_REQUIREMENTS requirements.in
-  PYTHON_INTERPRETER python3 #python3.10
-  USE_SYSTEM_PACKAGES FALSE
-  ISOLATE_REQUIREMENTS TRUE
+catkin_package(
 )
 
-catkin_package(
+catkin_generate_uv(
+  PYTHON_INTERPRETER python3
+  NO_DEV
 )
 
 catkin_install_python(PROGRAMS
